@@ -36,42 +36,65 @@ type Post = {
 // クリップ埋め込みURLを取得する関数をファイルのトップレベルに移動
 // これにより、EmbedVideoコンポーネントからもアクセスできるようになります。
 const getEmbedUrl = (url: string, parentDomain: string): string | null => {
+  console.log("getEmbedUrl が呼び出されました。受け取ったURL:", url);
   try {
     const u = new URL(url);
+    console.log("URLオブジェクトのホスト名:", u.hostname);
+    console.log("URLオブジェクトのパス名:", u.pathname);
+    
 
     // YouTube
-    if (u.hostname.includes('youtube.com') || u.hostname.includes('youtu.be')) { //
+    if (u.hostname.includes('youtube.com') || u.hostname.includes('youtu.be')) {
       const regex = /(?:\?v=|\/embed\/|\.be\/)([a-zA-Z0-9_-]{11})/;
       const match = url.match(regex);
       if (match) {
-        return `https://www.youtube.com/embed/${match[1]}`; //
+        return `https://www.youtube.com/embed/${match[1]}`;
       }
     }
     // Twitch Clips & Live
-    else if (u.hostname.includes('twitch.tv')) { //
-      const clipIdMatch = u.pathname.match(/(?:clips\.twitch\.tv\/|twitch\.tv\/[^\/]+\/clip\/)([a-zA-Z0-9_-]+)/); //
-      if (clipIdMatch && clipIdMatch[1]) {
-          return `https://clips.twitch.tv/embed?clip=${clipIdMatch[1]}&parent=${parentDomain}`; //
-      }
-      else if (u.pathname.length > 1 && !u.pathname.includes('/clip/')) { //
-          const channelName = u.pathname.slice(1);
-          return `https://player.twitch.tv/?channel=${channelName}&parent=${parentDomain}&muted=true`; //
+    else if (u.hostname.includes('twitch.tv')) {
+      console.log("Twitch URLと認識されました。");
+      
+      // Twitch クリップの処理を修正
+      if (u.hostname === 'clips.twitch.tv') {
+        // https://clips.twitch.tv/TameLivelyGoatKappaPride-H1Hxej69cFkx9EOd の形式
+        const clipId = u.pathname.slice(1); // 先頭の '/' を除去
+        console.log("clips.twitch.tv から抽出されたクリップID:", clipId);
+        if (clipId) {
+          const embedUrl = `https://clips.twitch.tv/embed?clip=${clipId}&parent=${parentDomain}`;
+          console.log("生成された埋め込みURL:", embedUrl);
+          return embedUrl;
+        }
+      } else if (u.hostname === 'www.twitch.tv') {
+        // https://www.twitch.tv/username/clip/TameLivelyGoatKappaPride-H1Hxej69cFkx9EOd の形式
+        const clipMatch = u.pathname.match(/\/[^\/]+\/clip\/([a-zA-Z0-9_-]+)/);
+        console.log("www.twitch.tv クリップマッチ結果:", clipMatch);
+        if (clipMatch && clipMatch[1]) {
+          const embedUrl = `https://clips.twitch.tv/embed?clip=${clipMatch[1]}&parent=${parentDomain}`;
+          console.log("生成された埋め込みURL:", embedUrl);
+          return embedUrl;
+        }
+        // ライブ配信の場合
+        else if (u.pathname.length > 1 && !u.pathname.includes('/clip/')) {
+          const channelName = u.pathname.slice(1).split('/')[0]; // 最初のパス要素のみ取得
+          return `https://player.twitch.tv/?channel=${channelName}&parent=${parentDomain}&muted=true`;
+        }
       }
     }
     // Medal.tv Clips
-    else if (u.hostname.includes('medal.tv')) { //
-      const medalClipIdMatch = u.pathname.match(/(?:clips\/|clip\/)([a-zA-Z0-9_-]+)(?:[\/?]|$)/); //
+    else if (u.hostname.includes('medal.tv')) {
+      const medalClipIdMatch = u.pathname.match(/(?:clips\/|clip\/)([a-zA-Z0-9_-]+)(?:[\/?]|$)/);
       if (medalClipIdMatch && medalClipIdMatch[1]) {
-          return `https://medal.tv/clip/${medalClipIdMatch[1]}/embed`; //
+          return `https://medal.tv/clip/${medalClipIdMatch[1]}/embed`;
       }
     }
   } catch (e) {
       console.error("URL解析エラー:", e);
       return null;
   }
+  console.log("どの埋め込みパターンにもマッチしませんでした。");
   return null;
 };
-
 // EmbedVideoコンポーネントもファイルのトップレベルに配置
 const EmbedVideo = ({ url, parentDomain }: { url: string; parentDomain: string | null }) => {
   if (parentDomain === null) {
