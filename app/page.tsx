@@ -23,6 +23,26 @@ import { auth, db } from '@/lib/firebase'; // Assuming '@/lib/firebase' points t
 
 const POST_LIFETIME_MS = 1000 * 60 * 60 * 24; // 24時間
 
+// 定義済みゲームタグ
+const GAME_TAGS = [
+  '#VALORANT',
+  '#Apex Legends',
+  '#Fortnite',
+  '#Call of Duty',
+  '#CS2',
+  '#Overwatch 2',
+  '#Rainbow Six Siege',
+  '#League of Legends',
+  '#PUBG',
+  '#Minecraft',
+  '#Fall Guys',
+  '#Rocket League',
+  '#Dead by Daylight',
+  '#Street Fighter 6',
+  '#Tekken 8',
+  '#その他'
+];
+
 type Post = {
   id?: string;
   url: string;
@@ -33,8 +53,7 @@ type Post = {
   photoURL: string | null;
 };
 
-// クリップ埋め込みURLを取得する関数をファイルのトップレベルに移動
-// これにより、EmbedVideoコンポーネントからもアクセスできるようになります。
+// クリップ埋め込みURLを取得する関数
 const getEmbedUrl = (url: string, parentDomain: string): string | null => {
   console.log("getEmbedUrl が呼び出されました。受け取ったURL:", url);
   try {
@@ -95,7 +114,8 @@ const getEmbedUrl = (url: string, parentDomain: string): string | null => {
   console.log("どの埋め込みパターンにもマッチしませんでした。");
   return null;
 };
-// EmbedVideoコンポーネントもファイルのトップレベルに配置
+
+// EmbedVideoコンポーネント
 const EmbedVideo = ({ url, parentDomain }: { url: string; parentDomain: string | null }) => {
   if (parentDomain === null) {
     return null;
@@ -117,7 +137,6 @@ const EmbedVideo = ({ url, parentDomain }: { url: string; parentDomain: string |
     />
   );
 };
-
 
 export default function Home() {
   const [user, setUser] = useState<User | null>(null);
@@ -244,13 +263,18 @@ export default function Home() {
               onChange={(e) => setUrl(e.target.value)}
               className="p-2 border rounded"
             />
-            <input
-              type="text"
-              placeholder="ゲームタグ（例: #VALORANT）"
+            <select
               value={tag}
               onChange={(e) => setTag(e.target.value)}
-              className="p-2 border rounded"
-            />
+              className="p-2 border rounded bg-white"
+            >
+              <option value="">ゲームタグを選択してください</option>
+              {GAME_TAGS.map((gameTag) => (
+                <option key={gameTag} value={gameTag}>
+                  {gameTag}
+                </option>
+              ))}
+            </select>
             <button
               onClick={handlePost}
               className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
