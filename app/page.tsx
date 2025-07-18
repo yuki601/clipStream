@@ -124,7 +124,7 @@ export default function Home() {
       const u = new URL(url);
 
       // YouTube
-      // YouTubeのホスト名（www.youtube.com または youtu.be）をチェック
+      // ホスト名が youtube.com または youtu.be であるかチェック
       if (u.hostname.includes('youtube.com') || u.hostname.includes('youtu.be')) {
         const regex = /(?:\?v=|\/embed\/|\.be\/)([a-zA-Z0-9_-]{11})/;
         const match = url.match(regex);
@@ -136,15 +136,26 @@ export default function Home() {
       // Twitch Clips
       else if (
         u.hostname === 'clips.twitch.tv' ||
-        u.hostname.endsWith('.twitch.tv')
+        u.hostname.endsWith('.twitch.tv') // www.twitch.tv/clip/... のようなURLも考慮
       ) {
-        const clipId = u.pathname.slice(1); // 例: /ClipID から ClipID を抽出
-        if (clipId)
-          return `https://clips.twitch.tv/embed?clip=${clipId}&parent=${parentDomain}`;
+        // クリップURLは clips.twitch.tv/ClipID または www.twitch.tv/ClipID の形式なので、pathname.slice(1)でClipIDを取得
+        // または、もしURLが www.twitch.tv/チャンネル名/clip/ClipID の形式なら、正規表現でClipIDを抽出する必要がある
+        // 一旦、clips.twitch.tv/ClipID を想定
+        const clipIdMatch = u.pathname.match(/\/([a-zA-Z0-9_-]+)$/); // パス末尾のIDを取得
+        if (clipIdMatch && clipIdMatch[1]) {
+            return `https://clips.twitch.tv/embed?clip=${clipIdMatch[1]}&parent=${parentDomain}`;
+        }
+        // もしチャンネルのライブストリームURLが来たら
+        else if (u.hostname.includes('twitch.tv') && u.pathname.length > 1 && !u.pathname.includes('/clip/')) {
+            const channelName = u.pathname.slice(1); // 例: /channelName から channelName を抽出
+            return `https://player.twitch.tv/?channel=${channelName}&parent=${parentDomain}&muted=true`;
+        }
+
       }
       // 他のサービスは後で追加可能
-    } catch {
-      return null;
+    } catch (e) {
+        console.error("URL解析エラー:", e);
+        return null;
     }
     return null;
   };
