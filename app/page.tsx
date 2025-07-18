@@ -118,39 +118,39 @@ export default function Home() {
     await signOut(auth);
   };
 
-  // クリップ埋め込みURLを取得する関数（YouTube/Twitch対応済み）
+  // クリップ埋め込みURLを取得する関数（YouTube/Twitch/Medal.tv対応済み）
   const getEmbedUrl = (url: string, parentDomain: string): string | null => {
     try {
       const u = new URL(url);
 
       // YouTube
-      // ホスト名が youtube.com または youtu.be であるかチェック
       if (u.hostname.includes('youtube.com') || u.hostname.includes('youtu.be')) {
         const regex = /(?:\?v=|\/embed\/|\.be\/)([a-zA-Z0-9_-]{11})/;
         const match = url.match(regex);
         if (match) {
-          // 正しいYouTube埋め込みURLを返す
           return `https://www.youtube.com/embed/${match[1]}`;
         }
       }
-      // Twitch Clips
-      else if (
-        u.hostname === 'clips.twitch.tv' ||
-        u.hostname.endsWith('.twitch.tv') // www.twitch.tv/clip/... のようなURLも考慮
-      ) {
-        // クリップURLは clips.twitch.tv/ClipID または www.twitch.tv/ClipID の形式なので、pathname.slice(1)でClipIDを取得
-        // または、もしURLが www.twitch.tv/チャンネル名/clip/ClipID の形式なら、正規表現でClipIDを抽出する必要がある
-        // 一旦、clips.twitch.tv/ClipID を想定
-        const clipIdMatch = u.pathname.match(/\/([a-zA-Z0-9_-]+)$/); // パス末尾のIDを取得
+      // Twitch Clips & Live
+      else if (u.hostname.includes('twitch.tv')) {
+        // クリップURLのパターン: clips.twitch.tv/ClipID または www.twitch.tv/チャンネル名/clip/ClipID
+        const clipIdMatch = u.pathname.match(/(?:clips\.twitch\.tv\/|twitch\.tv\/[^\/]+\/clip\/)([a-zA-Z0-9_-]+)/);
         if (clipIdMatch && clipIdMatch[1]) {
             return `https://clips.twitch.tv/embed?clip=${clipIdMatch[1]}&parent=${parentDomain}`;
         }
-        // もしチャンネルのライブストリームURLが来たら
-        else if (u.hostname.includes('twitch.tv') && u.pathname.length > 1 && !u.pathname.includes('/clip/')) {
+        // チャンネルライブストリームURLのパターン: www.twitch.tv/チャンネル名
+        else if (u.pathname.length > 1 && !u.pathname.includes('/clip/')) {
             const channelName = u.pathname.slice(1); // 例: /channelName から channelName を抽出
             return `https://player.twitch.tv/?channel=${channelName}&parent=${parentDomain}&muted=true`;
         }
-
+      }
+      // Medal.tv Clips
+      else if (u.hostname.includes('medal.tv')) {
+        // Medal.tvのURLからクリップIDを抽出
+        const medalClipIdMatch = u.pathname.match(/(?:clips\/|clip\/)([a-zA-Z0-9_-]+)(?:[\/?]|$)/);
+        if (medalClipIdMatch && medalClipIdMatch[1]) {
+            return `https://medal.tv/clip/${medalClipIdMatch[1]}/embed`;
+        }
       }
       // 他のサービスは後で追加可能
     } catch (e) {
@@ -162,16 +162,26 @@ export default function Home() {
 
   // 埋め込み動画コンポーネント
   const EmbedVideo = ({ url }: { url: string }) => {
-    const [parentDomain, setParentDomain] = useState('');
+    // parentDomainをnullで初期化
+    const [parentDomain, setParentDomain] = useState<string | null>(null);
+
     useEffect(() => {
+      // windowオブジェクトが利用可能になったらhostnameを設定
       if (typeof window !== 'undefined') {
         setParentDomain(window.location.hostname);
       }
-    }, []);
+    }, []); // 初回レンダリング後に一度だけ実行
+
+    // parentDomainがまだ設定されていない場合は何もレンダリングしない
+    if (parentDomain === null) {
+      return null; // またはローディングスピナーなどを表示しても良い
+    }
 
     const embedSrc = getEmbedUrl(url, parentDomain);
 
-    if (!embedSrc) return <p>このURLの埋め込みには対応していません。</p>;
+    if (!embedSrc) {
+      return <p>このURLの埋め込みには対応していません。</p>;
+    }
 
     return (
       <iframe
@@ -218,7 +228,7 @@ export default function Home() {
           <div className="flex flex-col gap-4 mb-4">
             <input
               type="text"
-              placeholder="クリップURL (YouTube/Twitch対応)"
+              placeholder="クリップURL (YouTube/Twitch/Medal.tv対応)"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               className="p-2 border rounded"
