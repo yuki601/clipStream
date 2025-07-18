@@ -328,31 +328,34 @@ export default function Home() {
           <h2 className="text-xl font-semibold mb-2">📺 投稿一覧</h2>
           <div className="flex flex-col gap-6">
             {filteredPosts.map((post) => (
-              <div key={post.id} className="border rounded p-4 shadow relative">
-                <div className="mb-2 flex items-center gap-2 text-sm text-gray-500">
-                  <img
-                    src={post.photoURL || ''}
-                    alt="avatar"
-                    className="w-5 h-5 rounded-full"
-                  />
-                  <span>{post.displayName}</span>
-                  <span className="ml-auto">{post.tag}</span>
+              <div key={post.id} className="border rounded p-4 shadow">
+                <div className="mb-2 flex items-center justify-between text-sm text-gray-500">
+                  <div className="flex items-center gap-2">
+                    <img
+                      src={post.photoURL || ''}
+                      alt="avatar"
+                      className="w-5 h-5 rounded-full"
+                    />
+                    <span>{post.displayName}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span>{post.tag}</span>
+                    {user?.uid === post.uid && (
+                      <button
+                        className="text-red-600 text-sm underline"
+                        onClick={() => {
+                          if (post.id) deletePost(post.id);
+                        }}
+                      >
+                        削除
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 <div className="aspect-video mb-2">
                   <EmbedVideo url={post.url} parentDomain={parentDomain} />
                 </div>
-
-                {user?.uid === post.uid && (
-                  <button
-                    className="absolute top-2 right-2 text-red-600 text-sm underline"
-                    onClick={() => {
-                      if (post.id) deletePost(post.id);
-                    }}
-                  >
-                    削除
-                  </button>
-                )}
               </div>
             ))}
           </div>
