@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   GoogleAuthProvider,
   signInWithPopup,
@@ -33,6 +33,69 @@ type Post = {
   photoURL: string | null;
 };
 
+// クリップ埋め込みURLを取得する関数をファイルのトップレベルに移動
+// これにより、EmbedVideoコンポーネントからもアクセスできるようになります。
+const getEmbedUrl = (url: string, parentDomain: string): string | null => {
+  try {
+    const u = new URL(url);
+
+    // YouTube
+    if (u.hostname.includes('youtube.com') || u.hostname.includes('youtu.be')) { //
+      const regex = /(?:\?v=|\/embed\/|\.be\/)([a-zA-Z0-9_-]{11})/;
+      const match = url.match(regex);
+      if (match) {
+        return `https://www.youtube.com/embed/${match[1]}`; //
+      }
+    }
+    // Twitch Clips & Live
+    else if (u.hostname.includes('twitch.tv')) { //
+      const clipIdMatch = u.pathname.match(/(?:clips\.twitch\.tv\/|twitch\.tv\/[^\/]+\/clip\/)([a-zA-Z0-9_-]+)/); //
+      if (clipIdMatch && clipIdMatch[1]) {
+          return `https://clips.twitch.tv/embed?clip=${clipIdMatch[1]}&parent=${parentDomain}`; //
+      }
+      else if (u.pathname.length > 1 && !u.pathname.includes('/clip/')) { //
+          const channelName = u.pathname.slice(1);
+          return `https://player.twitch.tv/?channel=${channelName}&parent=${parentDomain}&muted=true`; //
+      }
+    }
+    // Medal.tv Clips
+    else if (u.hostname.includes('medal.tv')) { //
+      const medalClipIdMatch = u.pathname.match(/(?:clips\/|clip\/)([a-zA-Z0-9_-]+)(?:[\/?]|$)/); //
+      if (medalClipIdMatch && medalClipIdMatch[1]) {
+          return `https://medal.tv/clip/${medalClipIdMatch[1]}/embed`; //
+      }
+    }
+  } catch (e) {
+      console.error("URL解析エラー:", e);
+      return null;
+  }
+  return null;
+};
+
+// EmbedVideoコンポーネントもファイルのトップレベルに配置
+const EmbedVideo = ({ url, parentDomain }: { url: string; parentDomain: string | null }) => {
+  if (parentDomain === null) {
+    return null;
+  }
+
+  const embedSrc = getEmbedUrl(url, parentDomain);
+
+  if (!embedSrc) {
+    return <p>このURLの埋め込みには対応していません。</p>;
+  }
+
+  return (
+    <iframe
+      className="w-full h-full"
+      src={embedSrc}
+      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+      allowFullScreen
+      title="Clip"
+    />
+  );
+};
+
+
 export default function Home() {
   const [user, setUser] = useState<User | null>(null);
   const [url, setUrl] = useState('');
@@ -41,7 +104,13 @@ export default function Home() {
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [showMyPostsOnly, setShowMyPostsOnly] = useState(false);
 
-  // ログイン状態監視
+  const parentDomain = useMemo(() => {
+    if (typeof window !== 'undefined') {
+      return window.location.hostname;
+    }
+    return null;
+  }, []);
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       setUser(firebaseUser);
@@ -49,7 +118,6 @@ export default function Home() {
     return () => unsubscribe();
   }, []);
 
-  // 投稿をFirestoreから取得
   const fetchPosts = async () => {
     const q = query(collection(db, 'posts'), orderBy('createdAt', 'desc'));
     const snapshot = await getDocs(q);
@@ -72,7 +140,6 @@ export default function Home() {
     fetchPosts();
   }, []);
 
-  // 投稿登録
   const handlePost = async () => {
     if (!url || !tag || !user) return;
 
@@ -92,13 +159,11 @@ export default function Home() {
     fetchPosts();
   };
 
-  // 投稿削除
   const deletePost = async (postId: string) => {
     await deleteDoc(doc(db, 'posts', postId));
     fetchPosts();
   };
 
-  // 24時間以内の投稿だけ表示＆タグ絞り込み＆自分の投稿のみ表示
   const filteredPosts = posts.filter((post) => {
     if (Date.now() - post.createdAt.toDate().getTime() > POST_LIFETIME_MS)
       return false;
@@ -109,89 +174,12 @@ export default function Home() {
 
   const uniqueTags = [...new Set(posts.map((post) => post.tag))];
 
-  // ログイン・ログアウト処理
   const handleLogin = async () => {
     const provider = new GoogleAuthProvider();
     await signInWithPopup(auth, provider);
   };
   const handleLogout = async () => {
     await signOut(auth);
-  };
-
-  // クリップ埋め込みURLを取得する関数（YouTube/Twitch/Medal.tv対応済み）
-  const getEmbedUrl = (url: string, parentDomain: string): string | null => {
-    try {
-      const u = new URL(url);
-
-      // YouTube
-      if (u.hostname.includes('youtube.com') || u.hostname.includes('youtu.be')) {
-        const regex = /(?:\?v=|\/embed\/|\.be\/)([a-zA-Z0-9_-]{11})/;
-        const match = url.match(regex);
-        if (match) {
-          return `https://www.youtube.com/embed/${match[1]}`;
-        }
-      }
-      // Twitch Clips & Live
-      else if (u.hostname.includes('twitch.tv')) {
-        // クリップURLのパターン: clips.twitch.tv/ClipID または www.twitch.tv/チャンネル名/clip/ClipID
-        const clipIdMatch = u.pathname.match(/(?:clips\.twitch\.tv\/|twitch\.tv\/[^\/]+\/clip\/)([a-zA-Z0-9_-]+)/);
-        if (clipIdMatch && clipIdMatch[1]) {
-            return `https://clips.twitch.tv/embed?clip=${clipIdMatch[1]}&parent=${parentDomain}`;
-        }
-        // チャンネルライブストリームURLのパターン: www.twitch.tv/チャンネル名
-        else if (u.pathname.length > 1 && !u.pathname.includes('/clip/')) {
-            const channelName = u.pathname.slice(1); // 例: /channelName から channelName を抽出
-            return `https://player.twitch.tv/?channel=${channelName}&parent=${parentDomain}&muted=true`;
-        }
-      }
-      // Medal.tv Clips
-      else if (u.hostname.includes('medal.tv')) {
-        // Medal.tvのURLからクリップIDを抽出
-        const medalClipIdMatch = u.pathname.match(/(?:clips\/|clip\/)([a-zA-Z0-9_-]+)(?:[\/?]|$)/);
-        if (medalClipIdMatch && medalClipIdMatch[1]) {
-            return `https://medal.tv/clip/${medalClipIdMatch[1]}/embed`;
-        }
-      }
-      // 他のサービスは後で追加可能
-    } catch (e) {
-        console.error("URL解析エラー:", e);
-        return null;
-    }
-    return null;
-  };
-
-  // 埋め込み動画コンポーネント
-  const EmbedVideo = ({ url }: { url: string }) => {
-    // parentDomainをnullで初期化
-    const [parentDomain, setParentDomain] = useState<string | null>(null);
-
-    useEffect(() => {
-      // windowオブジェクトが利用可能になったらhostnameを設定
-      if (typeof window !== 'undefined') {
-        setParentDomain(window.location.hostname);
-      }
-    }, []); // 初回レンダリング後に一度だけ実行
-
-    // parentDomainがまだ設定されていない場合は何もレンダリングしない
-    if (parentDomain === null) {
-      return null; // またはローディングスピナーなどを表示しても良い
-    }
-
-    const embedSrc = getEmbedUrl(url, parentDomain);
-
-    if (!embedSrc) {
-      return <p>このURLの埋め込みには対応していません。</p>;
-    }
-
-    return (
-      <iframe
-        className="w-full h-full"
-        src={embedSrc}
-        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-        allowFullScreen
-        title="Clip"
-      />
-    );
   };
 
   return (
@@ -305,7 +293,7 @@ export default function Home() {
                 </div>
 
                 <div className="aspect-video mb-2">
-                  <EmbedVideo url={post.url} />
+                  <EmbedVideo url={post.url} parentDomain={parentDomain} />
                 </div>
 
                 {user?.uid === post.uid && (
